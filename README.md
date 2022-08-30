@@ -5,7 +5,7 @@ You are a Data Scientist working for Hilton International Hotels and need to hel
 You have a dataset containing information on the various chain of hotels, including when customers made the booking, length of stay, the number of adults, children, or babies, and the number of available parking spaces, among other things.
 
 ## Problem Statement
-Given this dataset, perform data exploration, data cleaning, and analysis to come with appropriate strategy recommendations.
+Given this dataset, perform data exploration, data cleaning, and analysis to come with appropriate strategy recommendations that will lead to revenue growth.
 
 ## Dataset Overview
 - The data set contains booking information for a city hotel and a resort hotel. It includes information such as when customers made the booking, length of stay, the number of adults, children, or babies, and the number of available parking spaces, among other things.
