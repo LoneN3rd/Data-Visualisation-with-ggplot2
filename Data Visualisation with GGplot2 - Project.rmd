@@ -1,0 +1,525 @@
+---
+title: "Data Visualisation with GGplot2 - Project"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+
+## 1. Defining the Question
+
+### The context
+
+You are a Data Scientist working for Hilton International Hotels and need to help the management decide on the strategies that will lead to revenue growth. You have a dataset containing information on the various chain of hotels, including when customers made the booking, length of stay, the number of adults, children, or babies, and the number of available parking spaces, among other things.
+
+### The Data Analysis Question
+
+Perform data exploration, data cleaning, and analysis to come with appropriate strategy recommendations that will lead to revenue growth.
+
+### Metric for Success
+
+A solution to the following questions will help us answer our research question:
+
+● How many bookings were canceled?
+● What was the booking ratio between resort hotels and city hotels?
+● What was the percentage of booking for each year?
+● Which was the busiest month for hotels?
+● Most guests came from which country?
+● How long do most people stay in hotels?
+● Which was the most booked accommodation type (Single, Couple, Family)?
+
+## Dataset Overview
+
+The data set contains booking information for a city hotel and a resort hotel. It includes information such as when customers made the booking, length of stay, the number of adults, children, or babies, and the number of available parking spaces, among other things.
+
+### The Experimental Design
+
+- Read Data
+- External Data Source Validation
+- Data Preparation
+- Data Cleaning
+- Solution Implementation
+- Summary of Findings & Recommendations
+- Follow up questions
+
+
+## 2. Reading the Data
+
+```{r}
+
+# Set the working directory by choosing in Rstudio Menu: Session > Set Working Directory > To files panes location
+# Download the dataset from https://bit.ly/2WvQbhJ and using your computer's file manager, move it to your current working directory
+
+# Load data and preview the first 6 rows
+# ---
+df <- read_csv("hotel_bookings.csv")
+head(df)
+
+```
+
+```{r}
+# Preview the last 6 rows of data
+# ---
+
+tail(df)
+```
+
+```{r}
+# Sample 10 rows of data
+# ---
+
+sample_n(df, 10)
+```
+
+```{r}
+# Check number of rows and columns
+# ---
+
+dim(df)
+```
+
+```{r}
+# Checking datatypes
+# ---
+
+str(df)
+```
+
+Observations:
+
+- Our dataset has 119,390 rows and 32 columns
+- Our dataset has 3 data types: strings, doubles and date
+
+
+## 3. External Data Source Validation
+
+The data is originally from the article Hotel Booking Demand Datasets, by Nuno Antonio, Ana Almeida, and Luis Nunes for Data in Brief, Volume 22, February 2019.
+
+
+## 4. Data Cleaning & Preparation
+
+```{r}
+# Check how many duplicate rows are there in the data
+# We use x[duplicated(x),], where x is the dataframe
+# ---
+
+df[duplicated(df), ]
+```
+
+We choose to keep the duplicates because we don't have a unique identifier to actually prove that they really are duplicates.
+
+
+```{r}
+# Check if any of the columns are all null
+# ---
+
+sum(colSums(is.na(df)) == nrow(df))
+
+```
+
+Observation:
+
+- None of the columns is all null
+
+
+```{r}
+# Check missing entries of all the variables
+# ---
+
+print(colSums(is.na(df)))
+
+sum(is.na(df))
+
+```
+
+Observation:
+
+- There are 4 missing values in total, and the 4 are in the children column
+
+
+```{r}
+# Check if any of the rows are all null
+# ---
+
+sum(rowSums(is.na(df)) == ncol(df))
+```
+
+Observation:
+
+- None of the rows is all null
+
+```{r}
+# Let's see the correlation of the features using heatmap
+# ---
+
+# Create a correlation matrix for numerical columns
+cor(df[,sapply(df,is.numeric)], use="complete.obs", method="pearson")
+
+corr_matrix <- cor(df[,sapply(df,is.numeric)], use="complete.obs", method="pearson")
+head(corr_matrix)
+```
+
+```{r}
+# Create a table with long form
+corr_df <- melt(corr_matrix)
+head(corr_df)
+```
+
+```{r}
+# Plot the heatmap
+ggplot(corr_df, aes(Var1, Var2, fill = value)) + 
+  geom_tile(color = "black", size=0.25) + 
+  geom_text(
+    aes(label = round(value, 2)), 
+    color = "white"
+  ) +
+  coord_fixed() + 
+  labs(
+    fill="Pearson Correlation"
+  ) +
+  scale_fill_gradient2(
+    low = "blue", 
+    high = "red",
+    mid = "white", 
+    limit = c(-1,1)
+  ) + 
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank()
+  )
+
+#ggsave(p, filename="df-mod1.png", height=5.5, width=8.8, units="in", dpi=200)
+```
+
+Observation:
+- None of the numerical columns are highly correlated. However, there seems to be a slightly strong correlation between 
+stays_in_week_nights & stays_in_weekend_nights (0.49), and previous_bookings_not_canceled & is_repeated_guest (0.42).
+
+From the data variable description we see that the Distribution Channel column tells us about Booking distribution.
+
+The term “TA” means “Travel Agents”
+The term “TO” means “Tour Operators”
+This allows us to fill the missing values in the agents column with TO
+
+```{r}
+# We replace the missing values i.e. for TO
+# ---
+
+unique(df$distribution_channel)
+
+# TODO
+```
+
+```{r}
+# Check whether there are occurrences where there is no adult, baby and child
+# ---
+
+no_people <- df[(df$adults != 0 & df$children != 0 & df$babies != 0),]
+print(dim(no_people))
+```
+
+There are 172 observations with no no adult, baby and child recorded. These aren't useful and we have should drop them
+
+```{r}
+print (dim(df))
+```
+```{r}
+# Drop records where there is no adult, baby and child
+# ---
+
+new_df <- df[!(df$adults != 0 & df$children != 0 & df$babies != 0),]
+
+print (dim(new_df))
+```
+
+```{r}
+# We replace missing children values with rounded mean value
+# ---
+
+unique(new_df$children)
+
+new_df$children[is.na(new_df$children)] <- round(mean(new_df$children, na.rm = TRUE))
+
+print (dim(new_df))
+
+unique(new_df$children)
+
+```
+
+
+```{r}
+# Checking for missing values in the dataframe
+# ---
+
+sum(is.na(new_df))
+```
+
+Observation:
+  - We no longer have missing values
+  
+
+```{r}
+# Convert datatypes of the following columns from float to integer
+# i.e. children, company, agent
+# ---
+
+new_df$children <- as.integer(new_df$children)
+new_df$company <- as.integer(new_df$company)
+new_df$agent <- as.integer(new_df$agent)
+
+glimpse(new_df)
+```
+
+## 5. Solution Implementation
+
+### 5.a) Questions
+
+```{r}
+# 1. How many bookings were cancelled? Let's plot a Bar chart
+# ---
+
+library(ggplot2)
+
+cancellation_df <- group_by(new_df, is_canceled) %>%
+  summarise( count = length(is_canceled) )
+
+cancellation_df$is_canceled <- as.character(cancellation_df$is_canceled)
+cancellation_df
+```
+
+
+```{r}
+ggplot(data = cancellation_df, aes(x="", y = count, fill = is_canceled)) +
+  geom_bar(
+    stat="identity", width=0.5, color = "white"
+  ) +
+  coord_polar("y") + 
+  geom_text(
+    aes(label = paste0(count)), position = position_stack(vjust = 0.5)
+  ) +
+  scale_fill_brewer(palette="Set1") +   
+  labs(
+    title = "Booking ratio of hotel types"
+  ) +
+  theme_void()
+
+```
+
+Observation:
+  - 44,191 bookings were cancelled
+  
+  
+```{r}
+
+new_df_not_cancelled <- new_df %>%
+  filter(is_canceled == 0)
+
+dim(new_df_not_cancelled)
+
+```
+```{r}
+# 2. What was the booking ratio between resort hotel and city hotel?
+# ---
+
+hotel_df <- group_by(new_df_not_cancelled, hotel) %>%
+  summarise(
+    
+    hotel_ratio = (
+      round((length(hotel) / length(new_df_not_cancelled$hotel)) * 100, 0)
+      )
+    
+    )
+
+hotel_df
+
+```
+
+```{r}
+ggplot(data = hotel_df, aes(x="", y = hotel_ratio, fill = hotel)) +
+  geom_bar(
+    stat="identity", width=0.5, color = "white"
+  ) +
+  coord_polar("y") + 
+  geom_text(
+    aes(label = paste0(hotel_ratio, "%")), position = position_stack(vjust = 0.5)
+  ) +
+  scale_fill_brewer(palette="Set1") +   
+  labs(
+    title = "Booking ratio of hotel types"
+  ) +
+  theme_void()
+
+```
+Observation:
+  - City Hotels & Resort Hotels had a ration of 62 to 38
+  
+
+```{r}
+# 3. What was the percentage of booking for each year?
+# ---
+
+arrival_date_year_df <- group_by(new_df_not_cancelled, arrival_date_year) %>%
+  summarise(
+    
+    bookings_percentage = (
+      round((length(arrival_date_year) / length(new_df_not_cancelled$arrival_date_year)) * 100, 0)
+      )
+    
+    )
+
+arrival_date_year_df$arrival_date_year <- as.character(arrival_date_year_df$arrival_date_year)
+arrival_date_year_df
+
+```
+Observation:
+  - 2015:	18%			
+  - 2016	48%			
+  - 2017	34%	
+
+```{r}
+
+ggplot(data = arrival_date_year_df, aes(x="", y = bookings_percentage, fill = arrival_date_year)) +
+  geom_bar(
+    stat="identity", width=0.5, color = "white"
+  ) +
+  coord_polar("y") + 
+  geom_text(
+    aes(label = paste0(bookings_percentage, "%")), position = position_stack(vjust = 0.5)
+  ) +
+  scale_fill_brewer(palette="Set1") +   
+  labs(
+    title = "Percentage of booking for each year"
+  ) + 
+  theme(
+    plot.title = element_text(hjust = 0.5, size=16, family="Times New Roman"), 
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) +
+  theme_void()
+
+```
+
+Observation:
+  - 2016 had the most bookings, taking up 48% of all bookings
+  
+
+```{r}
+# 4. Which were the busiest months for hotels?
+# ---
+
+ggplot(data = new_df_not_cancelled, aes(x = arrival_date_month, fill='#0099f9') ) +
+  geom_bar() +
+  labs(
+    title = "Busiest months for hotels"
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size=16, family="Times New Roman"), 
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+
+```
+
+Observation:
+- The busiest months were August, July and May in that order
+
+
+
+```{r}
+# 5. From which top 3 countries did most guests come from?
+# --- 
+
+country_df <- group_by(new_df_not_cancelled, country) %>%
+  summarise( country_count = length(country) )
+
+country_df <- country_df[order(-country_df$country_count),]
+country_df
+
+```
+
+Observation:
+  - PRT, GBR and FRA were the top 3 countries
+  
+  
+```{r}
+# 6.a) How long do most people stay in hotels?
+#   b) By city and resort? Separate the data by hotel
+# ---
+
+stay_df <- new_df_not_cancelled %>%
+  mutate(total_stay = stays_in_weekend_nights + stays_in_week_nights) %>%
+  group_by(hotel) %>%
+  summarise(avg_stay = round(mean(total_stay), 0))
+
+stay_df
+```
+
+```{r}
+
+ggplot(data = stay_df, aes(x="", y = avg_stay, fill = hotel)) +
+  geom_bar(
+    stat="identity", width=0.5, color = "white"
+  ) +
+  coord_polar("y") + 
+  geom_text(
+    aes(label = paste0( avg_stay )), position = position_stack(vjust = 0.5)
+  ) +
+  scale_fill_brewer(palette="Set1") +   
+  labs(
+    title = "Average stay per hotel type"
+  ) +
+  theme_void()
+
+```
+
+Observation:
+  - Average stay of Resort hotels was 4 nights while that of City hotels was 3 nights
+
+
+```{r}
+# 7. Which was the most booked accommodation type (Single, Couple, Family)?
+# ---  
+ 
+accommodation_type_df <- new_df_not_cancelled %>%
+  mutate(accommodation_type = 
+           case_when(
+             new_df_not_cancelled$adults == 2 & new_df_not_cancelled$babies == 0 & new_df_not_cancelled$children == 0 ~ "Couple",
+             new_df_not_cancelled$adults == 1 & new_df_not_cancelled$babies == 0 & new_df_not_cancelled$children == 0 ~ "Single",
+             TRUE ~ "Family"
+           )
+  ) %>%
+  group_by(accommodation_type) 
+
+accommodation_types <- accommodation_type_df %>%
+  group_by(accommodation_type) %>%
+  summarise(
+    count = length(accommodation_type)
+  )
+
+accommodation_types
+```
+Observation:
+  - Couple bookings were the most
+  
+  
+## 7. Summary of Findings & Recommendations
+
+- Couple bookings were the most (65%)
+- 44,191 bookings were cancelled, that's about 37%
+- Average stay of Resort hotels was 4 nights while that of City hotels was 3 nights
+- PRT, GBR and FRA were the top 3 countries from which guests came from 
+- The busiest months were August, July and May in that order
+- 2016 had the most bookings, taking up 48% of all bookings
+- Ratio of City Hotels to Resort Hotels bookings was 62 to 38
+
+
+I recommend that the management puts up initiatives such as
+- Find out reasons for booking cancellations and come up with mitigation measures where possible
+- Targeted marketing to couples (as these form 65% of all uncancelled bookings), top countries from which guests come from, City Hotels (68%)
+
+
+## 8. Follow up questions
+
+a). Did we have the right data? Yes
+b). Do we need other data to answer our question? No
+c). Did we have the right question? Yes
+
+
